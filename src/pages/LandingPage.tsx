@@ -9,11 +9,12 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword 
+  signInWithEmailAndPassword,
+  signInAnonymously
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { toast } from 'sonner';
-import { MapPin, Users, Zap, Mail, Lock, ArrowRight } from 'lucide-react';
+import { MapPin, Users, Zap, Mail, Lock, ArrowRight, UserCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const [isEmailMode, setIsEmailMode] = useState(false);
@@ -30,6 +31,19 @@ export default function LandingPage() {
     } catch (error) {
       console.error(error);
       toast.error('فشل تسجيل الدخول. عاود جرب مرة أخرى.');
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      await signInAnonymously(auth);
+      toast.success('مرحبا بك كضيف!');
+    } catch (error) {
+      console.error(error);
+      toast.error('فشل دخول الضيف.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -188,6 +202,15 @@ export default function LandingPage() {
             >
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
               دخول بـ Google
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="w-full py-3 bg-neutral-900/50 text-neutral-400 font-bold rounded-2xl border border-dashed border-neutral-800 flex items-center justify-center gap-2 text-sm"
+            >
+              <UserCircle size={18} />
+              دخول كضيف (بدون حساب)
             </button>
           </div>
         </motion.form>
