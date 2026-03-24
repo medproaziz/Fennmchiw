@@ -16,7 +16,6 @@
         "friendCount": { "type": "number" },
         "outingCount": { "type": "number" },
         "rating": { "type": "number" },
-        "ratingCount": { "type": "number" },
         "createdAt": { "type": "number" }
       },
       "required": ["uid", "name", "age", "city", "interests", "personality", "budget", "createdAt"]
@@ -54,19 +53,6 @@
         "createdAt": { "type": "number" }
       },
       "required": ["id", "userIds", "placeId", "suggestedPlace", "startTime", "endTime", "status", "createdAt"]
-    },
-    "UserRating": {
-      "title": "UserRating",
-      "description": "A rating given by one user to another",
-      "type": "object",
-      "properties": {
-        "fromUserId": { "type": "string" },
-        "toUserId": { "type": "string" },
-        "matchId": { "type": "string" },
-        "score": { "type": "number" },
-        "timestamp": { "type": "number" }
-      },
-      "required": ["fromUserId", "toUserId", "matchId", "score", "timestamp"]
     }
   },
   "firestore": {
@@ -81,10 +67,6 @@
     "/matchGroups/{matchId}": {
       "schema": "MatchGroup",
       "description": "Collection of matched groups"
-    },
-    "/ratings/{ratingId}": {
-      "schema": "UserRating",
-      "description": "Collection of user ratings"
     }
   }
 }
