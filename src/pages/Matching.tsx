@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
@@ -21,6 +21,7 @@ export default function Matching() {
   const [matchingStep, setMatchingStep] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isMatched, setIsMatched] = useState(false);
+  const isMatchedRef = useRef(false);
 
   const steps = [
     "كنقلبو في مدينتك...",
@@ -35,7 +36,7 @@ export default function Matching() {
 
     const unsubscribe = onSnapshot(doc(db, 'sessions', sessionId), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data() as Session;
+        const data = { id: docSnap.id, ...docSnap.data() } as Session;
         setSession(data);
         if (data.status === 'matched' && data.matchGroupId) {
           navigate(`/match-result/${data.matchGroupId}`);
@@ -59,7 +60,7 @@ export default function Matching() {
 
     // REAL-TIME MATCHING LOGIC
     const startMatching = () => {
-      if (!session || session.status !== 'searching' || isMatched) return;
+      if (!session || session.status !== 'searching' || isMatchedRef.current) return;
 
       const q = query(
         collection(db, 'sessions'),
@@ -70,10 +71,10 @@ export default function Matching() {
       );
 
       const unsubscribeOthers = onSnapshot(q, async (snapshot) => {
-        if (isMatched) return;
+        if (isMatchedRef.current) return;
 
         const others = snapshot.docs
-          .map(d => d.data() as Session)
+          .map(d => ({ id: d.id, ...d.data() } as Session))
           .filter(s => {
             const isDifferentUser = s.userId !== session.userId;
             const timesOverlap = s.startTime < session.endTime && session.startTime < s.endTime;
@@ -82,9 +83,11 @@ export default function Matching() {
 
         // We need at least 2 people total (current user + at least 1 other)
         if (others.length >= 1) {
+          isMatchedRef.current = true;
           setIsMatched(true);
+          
           // Deterministic match ID based on sorted user IDs to prevent duplicate groups
-          const allUserIds = [session.userId, ...others.map(s => s.userId)].sort();
+          const allUserIds = Array.from(new Set([session.userId, ...others.map(s => s.userId)])).sort();
           const matchId = `match_${session.date}_${session.city}_${allUserIds.join('_')}`.replace(/\s+/g, '_');
           
           const suggestedPlace = MOCK_PLACES.find(p => p.type === session.activityType) || MOCK_PLACES[0];
@@ -104,10 +107,12 @@ export default function Matching() {
           try {
             // Play sound if enabled
             const userDoc = await getDoc(doc(db, 'users', session.userId));
-            const userData = userDoc.data() as UserProfile;
-            if (userData?.soundEnabled !== false) {
-              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-              audio.play().catch(e => console.error("Audio play failed:", e));
+            if (userDoc.exists()) {
+              const userData = userDoc.data() as UserProfile;
+              if (userData?.soundEnabled !== false) {
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.play().catch(e => console.warn("Audio play failed:", e));
+              }
             }
 
             // Use setDoc with deterministic ID
@@ -126,6 +131,7 @@ export default function Matching() {
             toast.success("لقينا ليك مجموعة!");
           } catch (error) {
             console.error("Error creating match:", error);
+            isMatchedRef.current = false;
             setIsMatched(false);
           }
         }

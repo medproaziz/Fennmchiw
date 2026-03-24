@@ -70,6 +70,8 @@ export default function MatchResult() {
       const msgs = snapshot.docs.map(d => d.data() as ChatMessage);
       setMessages(msgs);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `matchGroups/${matchId}/messages`);
     });
 
     return () => unsubscribe();
@@ -245,7 +247,7 @@ export default function MatchResult() {
                   <div className="relative">
                     <img
                       src={member.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.uid}`}
-                      alt={member.displayName}
+                      alt={member.displayName || member.name || 'مجهول'}
                       className="w-12 h-12 rounded-full border border-neutral-800"
                     />
                     {match.confirmedUserIds?.includes(member.uid) && (
@@ -255,9 +257,9 @@ export default function MatchResult() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h5 className="font-bold text-sm truncate">{member.displayName.split(' ')[0]}</h5>
+                    <h5 className="font-bold text-sm truncate">{(member.displayName || member.name || 'مجهول').split(' ')[0]}</h5>
                     <div className="flex gap-1 mt-1">
-                      {member.interests.slice(0, 3).map((interest, idx) => (
+                      {(member.interests || []).slice(0, 3).map((interest, idx) => (
                         <span key={idx} className="text-[9px] bg-neutral-900 text-neutral-500 px-1.5 py-0.5 rounded-md">
                           {interest}
                         </span>
