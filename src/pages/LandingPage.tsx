@@ -3,14 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword 
+} from 'firebase/auth';
 import { auth } from '../firebase';
 import { toast } from 'sonner';
-import { MapPin, Users, Zap } from 'lucide-react';
+import { MapPin, Users, Zap, Mail, Lock, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
-  const handleLogin = async () => {
+  const [isEmailMode, setIsEmailMode] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -18,6 +30,37 @@ export default function LandingPage() {
     } catch (error) {
       console.error(error);
       toast.error('فشل تسجيل الدخول. عاود جرب مرة أخرى.');
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      toast.error('عمر كاع الخانات عافاك.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        toast.success('تم إنشاء الحساب بنجاح!');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast.success('مرحبا بك مرة أخرى!');
+      }
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error('هاد الإيمايل ديجا مستعمل.');
+      } else if (error.code === 'auth/invalid-credential') {
+        toast.error('الإيمايل أو الكلمة السرية غلط.');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('الكلمة السرية ضعيفة بزاف.');
+      } else {
+        toast.error('وقع مشكل. عاود جرب مرة أخرى.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,14 +121,93 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleLogin}
-          className="w-full py-4 bg-orange-500 text-neutral-950 font-black rounded-2xl shadow-lg shadow-orange-500/20 transition-all text-lg"
-        >
-          بدا دابا
-        </motion.button>
+        {!isEmailMode ? (
+          <div className="space-y-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleGoogleLogin}
+              className="w-full py-4 bg-white text-neutral-950 font-black rounded-2xl shadow-lg transition-all text-lg flex items-center justify-center gap-3"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+              تسجيل الدخول بـ Google
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setIsEmailMode(true)}
+              className="w-full py-4 bg-neutral-900 text-white font-black rounded-2xl border border-neutral-800 transition-all text-lg flex items-center justify-center gap-3"
+            >
+              <Mail size={20} />
+              تسجيل الدخول بالإيمايل
+            </motion.button>
+          </div>
+        ) : (
+          <motion.form
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onSubmit={handleEmailAuth}
+            className="space-y-4 text-right"
+          >
+            <div className="space-y-2">
+              <div className="relative">
+                <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+                <input
+                  type="email"
+                  placeholder="الإيمايل"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
+                  required
+                />
+              </div>
+              <div className="relative">
+                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+                <input
+                  type="password"
+                  placeholder="الكلمة السرية"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-orange-500 text-neutral-950 font-black rounded-2xl shadow-lg shadow-orange-500/20 transition-all text-lg flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-6 h-6 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  {isSignUp ? 'إنشاء حساب' : 'دخول'}
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </button>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-orange-500 font-bold text-sm"
+              >
+                {isSignUp ? 'عندك حساب؟ دخل من هنا' : 'ماعندكش حساب؟ سجل من هنا'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEmailMode(false)}
+                className="text-neutral-500 font-bold text-sm"
+              >
+                رجوع
+              </button>
+            </div>
+          </motion.form>
+        )}
         
         <p className="text-[10px] text-neutral-600 uppercase tracking-widest font-bold">
           تصاوب بـ ❤️ للشباب المغربي
