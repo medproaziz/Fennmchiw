@@ -3,12 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, Shield, Eye, HelpCircle, Info, Trash2 } from 'lucide-react';
+import { ChevronLeft, Bell, Shield, Eye, HelpCircle, Info, Trash2, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { UserProfile } from '../types';
 
 export default function Settings() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const docRef = doc(db, 'users', auth.currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setProfile(docSnap.data() as UserProfile);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser.uid}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const toggleSound = async () => {
+    if (!auth.currentUser || !profile) return;
+    const newValue = !profile.soundEnabled;
+    try {
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        soundEnabled: newValue
+      });
+      setProfile({ ...profile, soundEnabled: newValue });
+      toast.success(newValue ? 'تم تفعيل الصوت' : 'تم إيقاف الصوت');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${auth.currentUser.uid}`);
+    }
+  };
 
   const settingsGroups = [
     {
@@ -19,10 +57,16 @@ export default function Settings() {
       ]
     },
     {
-      title: 'التنبيهات',
+      title: 'التنبيهات والصوت',
       items: [
+        { 
+          icon: profile?.soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />, 
+          label: 'صوت التنبيهات', 
+          action: toggleSound,
+          toggle: true,
+          value: profile?.soundEnabled ?? true
+        },
         { icon: <Bell size={20} />, label: 'تنبيهات المجموعات', action: () => toast.info('قريبا...') },
-        { icon: <Bell size={20} />, label: 'تنبيهات الرسائل', action: () => toast.info('قريبا...') },
       ]
     },
     {
@@ -66,6 +110,11 @@ export default function Settings() {
                     <div className="text-neutral-500">{item.icon}</div>
                     <span className="font-bold text-sm">{item.label}</span>
                   </div>
+                  {item.toggle && (
+                    <div className={`w-10 h-5 rounded-full transition-colors relative ${item.value ? 'bg-orange-500' : 'bg-neutral-800'}`}>
+                      <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${item.value ? 'right-1' : 'right-6'}`} />
+                    </div>
+                  )}
                 </button>
               ))}
             </div>

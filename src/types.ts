@@ -19,16 +19,19 @@ export type MatchGroupStatus = 'pending' | 'confirmed' | 'completed';
 export interface UserProfile {
   uid: string;
   name: string;
+  displayName: string; // Alias for name
   age: number;
   city: City;
   interests: Interest[];
   personality: Personality;
+  vibe?: string; // Short vibe description
   budget: BudgetLevel;
   photoURL?: string;
   createdAt: number;
   friendCount?: number;
   outingCount?: number;
   rating?: number;
+  soundEnabled?: boolean;
 }
 
 export interface Session {
@@ -65,5 +68,14 @@ export interface MatchGroup {
   startTime: string;
   endTime: string;
   status: MatchGroupStatus;
+  confirmedUserIds?: string[];
   createdAt: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  timestamp: number;
 }
