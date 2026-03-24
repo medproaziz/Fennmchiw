@@ -121,93 +121,76 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {!isEmailMode ? (
-          <div className="space-y-4">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleGoogleLogin}
-              className="w-full py-4 bg-white text-neutral-950 font-black rounded-2xl shadow-lg transition-all text-lg flex items-center justify-center gap-3"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
-              تسجيل الدخول بـ Google
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setIsEmailMode(true)}
-              className="w-full py-4 bg-neutral-900 text-white font-black rounded-2xl border border-neutral-800 transition-all text-lg flex items-center justify-center gap-3"
-            >
-              <Mail size={20} />
-              تسجيل الدخول بالإيمايل
-            </motion.button>
+        <motion.form
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          onSubmit={handleEmailAuth}
+          className="space-y-4 w-full"
+        >
+          <div className="space-y-3">
+            <div className="relative">
+              <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+              <input
+                type="email"
+                placeholder="الإيمايل (Email)"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
+                required
+              />
+            </div>
+            <div className="relative">
+              <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+              <input
+                type="password"
+                placeholder="الكلمة السرية (Password)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
+                required
+              />
+            </div>
           </div>
-        ) : (
-          <motion.form
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            onSubmit={handleEmailAuth}
-            className="space-y-4 text-right"
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-orange-500 text-neutral-950 font-black rounded-2xl shadow-lg shadow-orange-500/20 transition-all text-lg flex items-center justify-center gap-2"
           >
-            <div className="space-y-2">
-              <div className="relative">
-                <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
-                <input
-                  type="email"
-                  placeholder="الإيمايل"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
-                  required
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
-                <input
-                  type="password"
-                  placeholder="الكلمة السرية"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 pr-12 focus:border-orange-500 outline-none transition-colors text-right"
-                  required
-                />
-              </div>
+            {loading ? (
+              <div className="w-6 h-6 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                {isSignUp ? 'إنشاء حساب جديد' : 'دخول للحساب'}
+                <ArrowRight size={20} />
+              </>
+            )}
+          </button>
+
+          <div className="flex flex-col gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-orange-500 font-bold text-sm underline underline-offset-4"
+            >
+              {isSignUp ? 'عندك حساب؟ دخل من هنا' : 'ماعندكش حساب؟ سجل من هنا'}
+            </button>
+            
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-neutral-800"></div></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-neutral-950 px-2 text-neutral-600 font-bold">أو</span></div>
             </div>
 
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-orange-500 text-neutral-950 font-black rounded-2xl shadow-lg shadow-orange-500/20 transition-all text-lg flex items-center justify-center gap-2"
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full py-3 bg-neutral-900 text-white font-bold rounded-2xl border border-neutral-800 flex items-center justify-center gap-2 text-sm"
             >
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  {isSignUp ? 'إنشاء حساب' : 'دخول'}
-                  <ArrowRight size={20} />
-                </>
-              )}
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
+              دخول بـ Google
             </button>
-
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-orange-500 font-bold text-sm"
-              >
-                {isSignUp ? 'عندك حساب؟ دخل من هنا' : 'ماعندكش حساب؟ سجل من هنا'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsEmailMode(false)}
-                className="text-neutral-500 font-bold text-sm"
-              >
-                رجوع
-              </button>
-            </div>
-          </motion.form>
-        )}
+          </div>
+        </motion.form>
         
         <p className="text-[10px] text-neutral-600 uppercase tracking-widest font-bold">
           تصاوب بـ ❤️ للشباب المغربي
