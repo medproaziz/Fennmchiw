@@ -5,7 +5,7 @@
 
 export type City = 'الدار البيضاء' | 'الرباط' | 'مراكش' | 'طنجة' | 'أكادير' | 'فاس';
 
-export type Interest = 'قهاوي' | 'ريسطورات' | 'نشاط' | 'فخامة' | 'أنشطة' | 'سهرات' | 'ثقافة';
+export type Interest = 'قهاوي' | 'ريسطورات' | 'نشاط' | 'فخامة' | 'أنشطة' | 'سهرات' | 'ثقافة' | 'رياضة' | 'ألعاب' | 'سينما' | 'موسيقى' | 'طبيعة' | 'تصوير';
 
 export type Personality = 'هادي' | 'اجتماعي' | 'مغامر';
 
@@ -31,6 +31,7 @@ export interface UserProfile {
   friendCount?: number;
   outingCount?: number;
   rating?: number;
+  ratingCount?: number;
   soundEnabled?: boolean;
 }
 
@@ -58,6 +59,7 @@ export interface Place {
   imageUrl: string;
   rating: number;
   location: string;
+  mapUrl?: string;
 }
 
 export interface MatchGroup {
@@ -77,5 +79,14 @@ export interface ChatMessage {
   userId: string;
   userName: string;
   text: string;
+  timestamp: number;
+}
+
+export interface UserRating {
+  id?: string;
+  fromUserId: string;
+  toUserId: string;
+  matchId: string;
+  score: number;
   timestamp: number;
 }

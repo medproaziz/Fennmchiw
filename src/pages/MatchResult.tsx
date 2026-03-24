@@ -23,6 +23,33 @@ export default function MatchResult() {
   const [newMessage, setNewMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const [ratingModalUser, setRatingModalUser] = useState<UserProfile | null>(null);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [givenRatings, setGivenRatings] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!matchId || !auth.currentUser) return;
+
+    const q = query(
+      collection(db, 'ratings'),
+      where('matchId', '==', matchId),
+      where('fromUserId', '==', auth.currentUser.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ratings: Record<string, number> = {};
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        ratings[data.toUserId] = data.score;
+      });
+      setGivenRatings(ratings);
+    }, (error) => {
+      console.error("Error fetching ratings:", error);
+    });
+
+    return () => unsubscribe();
+  }, [matchId]);
+
   useEffect(() => {
     if (!matchId) return;
 
@@ -92,14 +119,55 @@ export default function MatchResult() {
     }
   };
 
+  const submitRating = async () => {
+    if (!ratingModalUser || selectedRating === 0 || !auth.currentUser || !matchId) return;
+    
+    try {
+      // Add rating doc
+      await addDoc(collection(db, 'ratings'), {
+        fromUserId: auth.currentUser.uid,
+        toUserId: ratingModalUser.uid,
+        matchId: matchId,
+        score: selectedRating,
+        timestamp: Date.now()
+      });
+
+      // Update user profile
+      const userRef = doc(db, 'users', ratingModalUser.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const userData = userSnap.data() as UserProfile;
+        const currentRating = userData.rating || 5;
+        const currentCount = userData.ratingCount || 1;
+        
+        const newCount = currentCount + 1;
+        const newRating = ((currentRating * currentCount) + selectedRating) / newCount;
+        
+        await updateDoc(userRef, {
+          rating: newRating,
+          ratingCount: newCount
+        });
+      }
+      
+      toast.success(`قيمتي ${ratingModalUser.name.split(' ')[0]} بنجاح!`);
+      setRatingModalUser(null);
+      setSelectedRating(0);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'ratings');
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !matchId || !auth.currentUser) return;
 
+    const currentUserProfile = members.find(m => m.uid === auth.currentUser?.uid);
+    const userName = currentUserProfile?.displayName || currentUserProfile?.name || auth.currentUser.displayName || 'مجهول';
+
     const msg: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
       userId: auth.currentUser.uid,
-      userName: auth.currentUser.displayName || 'مجهول',
+      userName: userName,
       text: newMessage,
       timestamp: Date.now(),
     };
@@ -266,13 +334,50 @@ export default function MatchResult() {
                       ))}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-2">
                     <span className="text-[10px] font-black italic text-orange-500/70 uppercase">
                       {member.vibe || 'Cool'}
                     </span>
+                    {member.uid !== auth.currentUser?.uid && (
+                      givenRatings[member.uid] ? (
+                        <div className="flex items-center gap-1 text-orange-500">
+                          <Star size={12} fill="currentColor" />
+                          <span className="text-[10px] font-bold">{givenRatings[member.uid]}</span>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setRatingModalUser(member)}
+                          className="text-[10px] bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-lg text-neutral-400 hover:text-orange-500 transition-colors flex items-center gap-1"
+                        >
+                          <Star size={10} /> قيّم
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black uppercase tracking-widest text-neutral-500">الموقع على الخريطة</h4>
+              {match.suggestedPlace.mapUrl && (
+                <a href={match.suggestedPlace.mapUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 underline">
+                  فتح في جوجل ماب
+                </a>
+              )}
+            </div>
+            <div className="w-full h-48 rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-900">
+              <iframe
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(match.suggestedPlace.name + ' ' + match.suggestedPlace.city)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+              ></iframe>
             </div>
           </div>
         </div>
@@ -300,6 +405,60 @@ export default function MatchResult() {
           <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full border-2 border-neutral-950" />
         </button>
       </div>
+
+      {/* Rating Modal */}
+      <AnimatePresence>
+        {ratingModalUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => setRatingModalUser(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-sm space-y-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-black italic tracking-tighter">تقييم {(ratingModalUser.displayName || ratingModalUser.name || 'مجهول').split(' ')[0]}</h3>
+                <p className="text-xs text-neutral-400">كيفاش داز الوقت معاه؟</p>
+              </div>
+              
+              <div className="flex justify-center gap-2">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    onClick={() => setSelectedRating(star)}
+                    className={`p-2 transition-colors ${selectedRating >= star ? 'text-orange-500' : 'text-neutral-700'}`}
+                  >
+                    <Star size={32} fill={selectedRating >= star ? 'currentColor' : 'none'} />
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRatingModalUser(null)}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm bg-neutral-800 text-neutral-400"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={submitRating}
+                  disabled={selectedRating === 0}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm bg-orange-500 text-neutral-950 disabled:opacity-50"
+                >
+                  تأكيد
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Chat Modal */}
       <AnimatePresence>
