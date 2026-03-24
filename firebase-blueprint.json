@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "city": { "type": "string" },
+        "interests": { "type": "array", "items": { "type": "string" } },
+        "personality": { "type": "string" },
+        "budget": { "type": "number" },
+        "photoURL": { "type": "string" },
+        "friendCount": { "type": "number" },
+        "outingCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "name", "age", "city", "interests", "personality", "budget", "createdAt"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "A user's go out session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "activityType": { "type": "string" },
+        "status": { "type": "string" },
+        "city": { "type": "string" },
+        "matchGroupId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "date", "startTime", "endTime", "activityType", "status", "city", "createdAt"]
+    },
+    "MatchGroup": {
+      "title": "MatchGroup",
+      "description": "A group of matched users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userIds": { "type": "array", "items": { "type": "string" } },
+        "placeId": { "type": "string" },
+        "suggestedPlace": { "type": "object" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userIds", "placeId", "suggestedPlace", "startTime", "endTime", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Collection of active sessions"
+    },
+    "/matchGroups/{matchId}": {
+      "schema": "MatchGroup",
+      "description": "Collection of matched groups"
+    }
+  }
+}

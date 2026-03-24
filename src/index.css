@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  
+  --color-orange-500: #FF6B00;
+  --color-neutral-950: #050505;
+  --color-neutral-900: #101010;
+  --color-neutral-800: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply bg-neutral-950 text-neutral-100 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-orange-500 text-neutral-950 font-black rounded-2xl px-6 py-4 
+           shadow-lg shadow-orange-500/20 transition-all active:scale-95 
+           flex items-center justify-center gap-2 text-lg;
+  }
+  
+  .card-glass {
+    @apply bg-neutral-900/50 backdrop-blur-md border border-neutral-800 rounded-[32px];
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-neutral-950;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-800 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-700;
+}

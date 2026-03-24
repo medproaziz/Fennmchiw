@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    function isSessionOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "elbadaouimohamedaziz49@gmail.com" && request.auth.token.email_verified == true));
+    }
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
+             data.age is number && data.age >= 18 && data.age < 100 &&
+             data.city is string &&
+             data.interests is list && data.interests.size() <= 10 &&
+             data.personality is string &&
+             data.budget is number && data.budget >= 1 && data.budget <= 4;
+    }
+    function isValidSession(data) {
+      return data.userId is string &&
+             data.date is string &&
+             data.startTime is string &&
+             data.endTime is string &&
+             data.activityType is string &&
+             data.status in ['searching', 'matched', 'confirmed', 'expired'] &&
+             data.city is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isOwner(uid) && isValidUser(request.resource.data);
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        // Owner can update their own session (heartbeat, lastSeen, etc.)
+        resource.data.userId == request.auth.uid || 
+        // Others can update status and matchGroupId during matching/unmatching
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'matchGroupId'])
+      );
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /matchGroups/{matchId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+  }
+}
