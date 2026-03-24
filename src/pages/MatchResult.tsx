@@ -193,7 +193,7 @@ export default function MatchResult() {
   const isConfirmed = auth.currentUser && match.confirmedUserIds?.includes(auth.currentUser.uid);
 
   return (
-    <div className="p-6 space-y-8 pb-24">
+    <div className="p-6 space-y-8 pb-48">
       <header className="flex justify-between items-start">
         <div className="space-y-1">
           <h2 className="text-3xl font-black tracking-tighter italic">
@@ -278,7 +278,7 @@ export default function MatchResult() {
         </div>
       </motion.div>
 
-      <div className="fixed bottom-6 left-6 right-6 flex gap-3">
+      <div className="fixed bottom-24 left-6 right-6 flex gap-3 z-40">
         {!isConfirmed ? (
           <button
             onClick={handleConfirm}
@@ -308,7 +308,7 @@ export default function MatchResult() {
             initial={{ opacity: 0, y: '100%' }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
-            className="fixed inset-0 z-50 bg-neutral-950 flex flex-col"
+            className="fixed inset-0 z-[60] bg-neutral-950 flex flex-col"
           >
             <div className="p-4 border-b border-neutral-900 flex items-center justify-between bg-neutral-950/80 backdrop-blur-xl sticky top-0">
               <div className="flex items-center gap-3">
