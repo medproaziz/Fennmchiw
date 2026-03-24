@@ -54,18 +54,6 @@ export default function Matching() {
       setMatchingStep((s) => (s + 1) % steps.length);
     }, 3000);
 
-    // HEARTBEAT to keep session alive
-    const heartbeat = setInterval(async () => {
-      if (!sessionId || !session || session.status !== 'searching') return;
-      try {
-        await updateDoc(doc(db, 'sessions', sessionId), {
-          lastSeen: Date.now()
-        });
-      } catch (e) {
-        // Silent fail for heartbeat
-      }
-    }, 10000);
-
     // REAL-TIME MATCHING LOGIC
     const startMatching = () => {
       if (!session || session.status !== 'searching') return;
@@ -79,16 +67,14 @@ export default function Matching() {
       );
 
       const unsubscribeOthers = onSnapshot(q, async (snapshot) => {
-        const now = Date.now();
         const others = snapshot.docs
           .map(d => d.data() as Session)
           .filter(s => {
             const isDifferentUser = s.userId !== session.userId;
             // Check for any time overlap
             const timesOverlap = s.startTime < session.endTime && session.startTime < s.endTime;
-            // ONLY match with sessions that have been seen in the last 30 seconds
-            const isActive = s.lastSeen && (now - s.lastSeen < 30000);
-            return isDifferentUser && timesOverlap && isActive;
+            // Match with any searching session, even if not currently active
+            return isDifferentUser && timesOverlap;
           });
 
         if (others.length > 0) {
@@ -140,7 +126,6 @@ export default function Matching() {
     return () => {
       if (cleanup) cleanup();
       clearInterval(interval);
-      clearInterval(heartbeat);
     };
   }, [session]);
 
