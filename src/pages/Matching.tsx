@@ -176,8 +176,16 @@ export default function Matching() {
                     const data = snap.data();
                     const timesOverlap = data.startTime < session.endTime && session.startTime < data.endTime;
                     
-                    // Verify group is still valid, has space, and times overlap
-                    if (data.status === 'pending' && data.userIds.length < 5 && timesOverlap) {
+                    // NEW: Check for common interests with the group
+                    const groupMembers = data.members || [];
+                    const hasSharedInterestWithGroup = (!session.interests?.length || groupMembers.length === 0) 
+                      ? true 
+                      : groupMembers.some((m: any) => 
+                          (m.interests || []).some((i: string) => (session.interests || []).includes(i))
+                        );
+
+                    // Verify group is still valid, has space, times overlap, and shared interest
+                    if (data.status === 'pending' && data.userIds.length < 5 && timesOverlap && hasSharedInterestWithGroup) {
                       targetGroupId = snap.id;
                       matchGroupRef = snap.ref;
                       matchGroupData = data;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, deleteDoc, doc, getDocs, writeBatch, query } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Users, Activity, Layers, Calendar, Loader2, Eye, Trash2, X, LayoutDashboard } from 'lucide-react';
+import { Users, Activity, Layers, Calendar, Loader2, Eye, Trash2, X, LayoutDashboard, RefreshCw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface MatchGroup {
@@ -59,6 +59,39 @@ export default function AdminDashboard() {
   // Modal States
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [itemToDelete, setItemToDelete] = useState<UserData | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetApp = async () => {
+    setResetting(true);
+    try {
+      const collectionsToClear = ['users', 'sessions', 'matchGroups', 'ratings', 'notifications'];
+      const batch = writeBatch(db);
+      let totalDeleted = 0;
+
+      for (const colName of collectionsToClear) {
+        const snapshot = await getDocs(collection(db, colName));
+        snapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+          totalDeleted++;
+        });
+      }
+
+      if (totalDeleted > 0) {
+        await batch.commit();
+        toast.success(`تم تصفير التطبيق بنجاح. تم حذف ${totalDeleted} وثيقة.`);
+      } else {
+        toast.info('التطبيق فارغ بالفعل.');
+      }
+      
+      setShowResetConfirm(false);
+    } catch (error) {
+      console.error("Error resetting app:", error);
+      toast.error('حدث خطأ أثناء تصفير التطبيق.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   useEffect(() => {
     let usersLoaded = false;
@@ -161,9 +194,18 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-neutral-950 p-4 md:p-8 font-sans text-neutral-100" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">لوحة تحكم الإدارة</h1>
-          <p className="text-neutral-400 mt-2">إدارة المستخدمين، الجلسات، والمجموعات.</p>
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white">لوحة تحكم الإدارة</h1>
+            <p className="text-neutral-400 mt-2">إدارة المستخدمين، الجلسات، والمجموعات.</p>
+          </div>
+          <button 
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
+          >
+            <RefreshCw size={18} className={resetting ? 'animate-spin' : ''} />
+            تصفير التطبيق بالكامل
+          </button>
         </div>
 
         {/* Navigation Tabs */}
@@ -337,6 +379,37 @@ export default function AdminDashboard() {
                 className="flex-1 py-3 rounded-xl font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
               >
                 نعم، احذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-neutral-900 rounded-2xl max-w-md w-full border border-neutral-800 shadow-2xl p-8 text-center">
+            <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle size={40} />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-3">تصفير التطبيق؟</h3>
+            <p className="text-neutral-400 mb-8 leading-relaxed">
+              هاد الإجراء غادي يمسح <span className="text-red-500 font-bold">كاع المستخدمين، المجموعات، الجلسات، والتقييمات</span>. التطبيق غادي يرجع خاوي بحال يلاه تصاوب. واش متأكد؟
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleResetApp}
+                disabled={resetting}
+                className="w-full py-4 rounded-xl font-black bg-red-500 text-white hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+              >
+                {resetting ? <Loader2 className="animate-spin" /> : 'نعم، مسح كولشي دابا'}
+              </button>
+              <button 
+                onClick={() => setShowResetConfirm(false)}
+                disabled={resetting}
+                className="w-full py-4 rounded-xl font-bold bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white transition-all"
+              >
+                إلغاء
               </button>
             </div>
           </div>

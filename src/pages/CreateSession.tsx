@@ -67,6 +67,9 @@ export default function CreateSession() {
       const session: Session = {
         id: sessionId,
         userId: auth.currentUser.uid,
+        userName: profile.name,
+        userAvatar: profile.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${auth.currentUser.uid}`,
+        interests: profile.interests,
         city: profile.city,
         activityType: formData.activityType,
         date: formData.date,

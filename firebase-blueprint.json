@@ -28,6 +28,9 @@
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "interests": { "type": "array", "items": { "type": "string" } },
         "date": { "type": "string" },
         "startTime": { "type": "string" },
         "endTime": { "type": "string" },
