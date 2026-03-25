@@ -40,17 +40,39 @@ export default function Settings() {
   }, []);
 
   const requestNotificationPermission = async () => {
+    // Check if we are on iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+
     if (!('Notification' in window)) {
-      toast.error('متصفحك لا يدعم إشعارات الهاتف');
+      if (isIOS && !isStandalone) {
+        toast.error('على آيفون، خاصك تزيد التطبيق للشاشة الرئيسية (Add to Home Screen) باش تخدم الإشعارات');
+      } else {
+        toast.error('متصفحك لا يدعم إشعارات الهاتف حاليا');
+      }
       return;
     }
+
     try {
-      const permission = await Notification.requestPermission();
+      // Some browsers don't support the promise-based requestPermission
+      const permission = await new Promise<NotificationPermission>((resolve) => {
+        const result = Notification.requestPermission(resolve);
+        if (result) {
+          result.then(resolve);
+        }
+      });
+
       setNotificationPermission(permission);
+      
       if (permission === 'granted') {
         toast.success('تم تفعيل إشعارات الهاتف بنجاح');
-      } else {
-        toast.error('تم رفض إشعارات الهاتف');
+        // Test notification
+        new window.Notification('فين نمشيو؟', {
+          body: 'تم تفعيل التنبيهات بنجاح! غادي يوصلوك إشعارات هنا.',
+          icon: '/vite.svg'
+        });
+      } else if (permission === 'denied') {
+        toast.error('لقد قمت بحظر الإشعارات. يرجى تفعيلها من إعدادات المتصفح.');
       }
     } catch (error) {
       console.error('Error requesting notification permission:', error);
