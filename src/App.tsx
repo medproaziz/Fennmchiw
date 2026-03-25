@@ -19,6 +19,7 @@ import MatchResult from './pages/MatchResult';
 import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
 import Settings from './pages/Settings';
+import AdminDashboard from './pages/AdminDashboard';
 
 // Components
 import Layout from './components/Layout';
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/profile" element={user ? <Profile /> : <Navigate to="/" />} />
               <Route path="/edit-profile" element={user ? <EditProfile /> : <Navigate to="/" />} />
               <Route path="/settings" element={user ? <Settings /> : <Navigate to="/" />} />
+              <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/" />} />
             </Route>
           </Routes>
           <Toaster position="top-center" theme="dark" closeButton />
