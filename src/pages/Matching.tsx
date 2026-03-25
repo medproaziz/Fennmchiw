@@ -304,7 +304,8 @@ export default function Matching() {
     );
   }
 
-  const isTimeout = timeElapsed > 1800; // 30 minutes in seconds
+  // WAITING POOL: Users wait for a short duration (5 minutes) before being considered for cancellation
+  const isTimeout = timeElapsed > 300; 
 
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-6 text-center space-y-12">
