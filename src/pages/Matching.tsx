@@ -62,7 +62,19 @@ export default function Matching() {
         const [hours, minutes] = session.endTime.split(':').map(Number);
         const sessionEnd = new Date(year, month - 1, day, hours, minutes);
         if (new Date() > sessionEnd) {
-          updateDoc(doc(db, 'sessions', session.id), { status: 'expired' }).then(() => {
+          updateDoc(doc(db, 'sessions', session.id), { status: 'expired' }).then(async () => {
+            // Send notification
+            const notifRef = doc(collection(db, 'notifications'));
+            await setDoc(notifRef, {
+              id: notifRef.id,
+              userId: session.userId,
+              title: 'سالينا البحث ⌛',
+              body: 'وقت البحث سالا وما لقيناش مجموعة. جرب مرة أخرى!',
+              type: 'system',
+              read: false,
+              link: '/home',
+              createdAt: Date.now()
+            });
             toast.info('وقت الخرجة سالا، تم إنهاء البحث.');
             navigate('/');
           }).catch(console.error);
@@ -140,11 +152,9 @@ export default function Matching() {
 
         // UPDATED: Priority logic - Proceed if we have candidate groups OR other searching users
         if (candidateGroupRefs.length > 0 || others.length >= 1) {
-          let matchFound = false; // NEW: Flag for successful match event
-
           try {
             // FIXED: Use runTransaction to prevent Race Conditions
-            await runTransaction(db, async (transaction) => {
+            const result = await runTransaction(db, async (transaction) => {
               // 1. Ensure current user's session is still "searching"
               const mySessionRef = doc(db, 'sessions', session.id);
               const mySessionSnap = await transaction.get(mySessionRef);
@@ -267,30 +277,50 @@ export default function Matching() {
                 });
               });
               
-              matchFound = true; // NEW: Activate match flag
+              return { targetGroupId, matchGroupData };
             });
 
             // FIXED: Only set isMatchedRef.current = true AFTER successful transaction
-            if (matchFound) {
+            if (result && result.targetGroupId) {
+              const { targetGroupId, matchGroupData } = result;
               isMatchedRef.current = true;
               setIsMatched(true);
               
               // Create notifications for other users in the group
               try {
                 const otherUserIds = matchGroupData.userIds.filter((id: string) => id !== session.userId);
+                
+                // Determine if this was a new group or joining an existing one
+                const isNewGroup = matchGroupData.userIds.length <= 2; // Assuming 2 users for a new group
+
                 for (const uid of otherUserIds) {
                   const notifRef = doc(collection(db, 'notifications'));
                   await setDoc(notifRef, {
                     id: notifRef.id,
                     userId: uid,
-                    title: 'مجموعة جديدة!',
-                    body: `لقينا ليك مجموعة باش تخرجو لـ ${session.activityType}`,
+                    title: isNewGroup ? 'مجموعة جديدة!' : 'عضو جديد انضم!',
+                    body: isNewGroup 
+                      ? `لقينا ليك مجموعة باش تخرجو لـ ${session.activityType}`
+                      : `${session.userName || 'واحد العضو'} انضم للمجموعة ديالكم!`,
                     type: 'match',
                     read: false,
                     link: `/match-result/${targetGroupId}`,
                     createdAt: Date.now()
                   });
                 }
+
+                // Also notify current user if they are in background
+                const myNotifRef = doc(collection(db, 'notifications'));
+                await setDoc(myNotifRef, {
+                  id: myNotifRef.id,
+                  userId: session.userId,
+                  title: 'لقينا المجموعة! 🎉',
+                  body: `لقينا ليك مجموعة باش تخرجو لـ ${session.activityType}`,
+                  type: 'match',
+                  read: false,
+                  link: `/match-result/${targetGroupId}`,
+                  createdAt: Date.now()
+                });
               } catch (e) {
                 console.error("Failed to send notifications", e);
               }

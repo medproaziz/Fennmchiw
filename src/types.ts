@@ -38,6 +38,9 @@ export interface UserProfile {
 export interface Session {
   id: string;
   userId: string;
+  userName?: string;
+  userAvatar?: string;
+  interests?: string[];
   date: string; // ISO date string
   startTime: string; // HH:mm
   endTime: string; // HH:mm
@@ -68,7 +71,13 @@ export interface MatchGroup {
   activityType?: string;
   date?: string;
   userIds: string[];
-  members?: any[];
+  members?: {
+    id: string;
+    name: string;
+    avatar: string;
+    interests: string[];
+    metadata?: any;
+  }[];
   placeId: string;
   suggestedPlace: Place;
   startTime: string;

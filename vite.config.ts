@@ -14,10 +14,13 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
         manifest: {
-          name: 'Group Rating App',
-          short_name: 'RatingApp',
-          description: 'Rate your group members',
-          theme_color: '#ffffff',
+          name: 'فين نمشيو - تلاقا مع ناس جداد',
+          short_name: 'فين نمشيو',
+          description: 'تطبيق باش تلاقا مع ناس جداد وتخرجو مجموعين فمدينتك',
+          theme_color: '#0a0a0a',
+          background_color: '#0a0a0a',
+          display: 'standalone',
+          orientation: 'portrait',
           icons: [
             {
               src: 'icon.svg',

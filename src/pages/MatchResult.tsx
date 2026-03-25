@@ -51,6 +51,19 @@ export default function MatchResult() {
             snap.forEach(async (docSnap) => {
               await updateDoc(docSnap.ref, { status: 'expired' });
             });
+
+            // Send notification
+            const notifRef = doc(collection(db, 'notifications'));
+            await setDoc(notifRef, {
+              id: notifRef.id,
+              userId: auth.currentUser.uid,
+              title: 'سالات الخرجة 👋',
+              body: 'وقت الخرجة سالا، كنتمنى تكون دوزتي وقت زوين!',
+              type: 'system',
+              read: false,
+              link: '/home',
+              createdAt: Date.now()
+            });
           }
 
           toast.info('وقت الخرجة سالا، تم إنهاء المجموعة.');
@@ -112,7 +125,7 @@ export default function MatchResult() {
 
         setMatch(data);
       } else {
-        if (!docSnap.metadata.fromCache) {
+        if (!(docSnap as any).metadata.fromCache) {
           toast.error('المجموعة تفرتكات حيت بقا فيها غير واحد.');
           navigate('/home');
         }
@@ -180,6 +193,24 @@ export default function MatchResult() {
         confirmedUserIds: [...confirmedIds, auth.currentUser.uid]
       });
       toast.success('أكدتي الحضور ديالك!');
+
+      // Notify others about confirmation
+      const otherUserIds = match.userIds.filter(id => id !== auth.currentUser?.uid);
+      const userName = members.find(m => m.uid === auth.currentUser?.uid)?.name?.split(' ')[0] || 'عضو';
+      
+      for (const uid of otherUserIds) {
+        const notifRef = doc(collection(db, 'notifications'));
+        await setDoc(notifRef, {
+          id: notifRef.id,
+          userId: uid,
+          title: 'تأكيد الحضور ✅',
+          body: `${userName} أكد الحضور ديالو في المجموعة.`,
+          type: 'system',
+          read: false,
+          link: `/match-result/${matchId}`,
+          createdAt: Date.now()
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `matchGroups/${matchId}`);
     }
@@ -272,7 +303,8 @@ export default function MatchResult() {
       if (newUserIds.length < 2) {
         // Reset remaining user's session if only 1 left
         if (newUserIds.length === 1) {
-          const q = query(collection(db, 'sessions'), where('userId', '==', newUserIds[0]));
+          const remainingUserId = newUserIds[0];
+          const q = query(collection(db, 'sessions'), where('userId', '==', remainingUserId));
           let snap;
           try {
             snap = await getDocs(q);
@@ -285,6 +317,19 @@ export default function MatchResult() {
               await updateDoc(snap.docs[0].ref, {
                 status: 'searching',
                 matchGroupId: null
+              });
+
+              // Notify the remaining user
+              const notifRef = doc(collection(db, 'notifications'));
+              await setDoc(notifRef, {
+                id: notifRef.id,
+                userId: remainingUserId,
+                title: 'تفرتكات المجموعة ⚠️',
+                body: 'بقا غير نتا فالمجموعة، رجعنا كنقلبو ليك على ناس خرين.',
+                type: 'system',
+                read: false,
+                link: '/home',
+                createdAt: Date.now()
               });
             } catch (e) {
               handleFirestoreError(e, OperationType.UPDATE, `sessions/${snap.docs[0].id}`);
@@ -322,6 +367,24 @@ export default function MatchResult() {
       }
       const deletePromises = snap.docs.map(d => deleteDoc(d.ref).catch(e => handleFirestoreError(e, OperationType.DELETE, `sessions/${d.id}`)));
       await Promise.all(deletePromises);
+
+      // Notify others about leaving
+      const otherUserIds = match.userIds.filter(id => id !== auth.currentUser?.uid);
+      const userName = members.find(m => m.uid === auth.currentUser?.uid)?.name?.split(' ')[0] || 'عضو';
+      
+      for (const uid of otherUserIds) {
+        const notifRef = doc(collection(db, 'notifications'));
+        await setDoc(notifRef, {
+          id: notifRef.id,
+          userId: uid,
+          title: 'عضو غادر المجموعة 🚪',
+          body: `${userName} خرج من المجموعة.`,
+          type: 'system',
+          read: false,
+          link: `/match-result/${matchId}`,
+          createdAt: Date.now()
+        });
+      }
 
       toast.success('خرجتي من المجموعة.');
       navigate('/home');

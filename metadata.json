@@ -1,5 +1,5 @@
 {
-  "name": "FinNroho",
-  "description": "A modern Moroccan social matching app to find people to go out with based on shared free time and interests.",
-  "requestFramePermissions": []
+  "name": "فين نمشيو",
+  "description": "تطبيق مغربي باش تلاقا مع ناس جداد وتخرجو مجموعين فمدينتك على حساب الوقت اللي مسالي فيه والاهتمامات ديالك.",
+  "requestFramePermissions": ["notifications"]
 }

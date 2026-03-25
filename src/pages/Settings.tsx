@@ -69,7 +69,7 @@ export default function Settings() {
         // Test notification
         new window.Notification('فين نمشيو؟', {
           body: 'تم تفعيل التنبيهات بنجاح! غادي يوصلوك إشعارات هنا.',
-          icon: '/vite.svg'
+          icon: '/icon.svg'
         });
       } else if (permission === 'denied') {
         toast.error('لقد قمت بحظر الإشعارات. يرجى تفعيلها من إعدادات المتصفح.');

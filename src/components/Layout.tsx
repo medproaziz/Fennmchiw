@@ -4,7 +4,7 @@
  */
 
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, User, PlusCircle, MapPin, Bell } from 'lucide-react';
+import { Home, User, PlusCircle, MapPin, Bell, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -45,9 +45,12 @@ export default function Layout() {
           if (change.type === 'added') {
             const notif = change.doc.data() as AppNotification;
             // Don't show toast if it's an old notification just being loaded
-            if (Date.now() - notif.createdAt < 5000) {
+            if (Date.now() - notif.createdAt < 15000) {
               
-              if (location.pathname !== '/notifications') {
+              const isNotifsPage = location.pathname === '/notifications';
+              const isAppFocused = document.visibilityState === 'visible';
+
+              if (!isNotifsPage) {
                 toast(notif.title, {
                   description: notif.body,
                   action: {
@@ -58,15 +61,23 @@ export default function Layout() {
               }
 
               // System Notification (OS Level)
-              if ('Notification' in window && Notification.permission === 'granted') {
+              // Show if app is not focused OR if not on notifications page
+              if ('Notification' in window && Notification.permission === 'granted' && (!isAppFocused || !isNotifsPage)) {
                 try {
                   const systemNotif = new window.Notification(notif.title, {
                     body: notif.body,
-                    icon: '/vite.svg', // Fallback icon
+                    icon: '/icon.svg',
                     dir: 'rtl',
-                    lang: 'ar'
-                  });
+                    lang: 'ar',
+                    tag: notif.id, // Prevent duplicate notifications for same ID
+                    renotify: true
+                  } as any);
                   
+                  // Vibrate if supported
+                  if ('vibrate' in navigator) {
+                    navigator.vibrate([200, 100, 200]);
+                  }
+
                   systemNotif.onclick = () => {
                     window.focus();
                     if (notif.link) {
@@ -97,7 +108,12 @@ export default function Layout() {
   return (
     <div className="flex flex-col min-h-screen pb-20">
       <header className="sticky top-0 z-50 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tighter text-orange-500 italic">فين نمشيو</h1>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <Zap size={20} className="text-neutral-950 fill-current" />
+          </div>
+          <h1 className="text-xl font-black tracking-tighter text-white italic">فين نمشيو</h1>
+        </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-xs text-neutral-400">
             <MapPin size={14} className="text-orange-500" />
