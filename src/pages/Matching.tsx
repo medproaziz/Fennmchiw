@@ -102,8 +102,19 @@ export default function Matching() {
         // NEW: Limit to 4 other people (so total is 5 with current user)
         others = others.slice(0, 4);
 
-        // We need at least 2 people total (current user + at least 1 other)
-        if (others.length >= 1) {
+        // NEW: Find existing groups (Query outside, verify inside transaction)
+        const groupsQuery = query(
+          collection(db, 'matchGroups'),
+          where('city', '==', session.city),
+          where('activityType', '==', session.activityType),
+          where('date', '==', session.date),
+          where('status', '==', 'pending')
+        );
+        const pendingGroupsSnap = await getDocs(groupsQuery);
+        const candidateGroupRefs = pendingGroupsSnap.docs.map(d => d.ref);
+
+        // UPDATED: Priority logic - Proceed if we have candidate groups OR other searching users
+        if (candidateGroupRefs.length > 0 || others.length >= 1) {
           let matchFound = false; // NEW: Flag for successful match event
 
           try {
@@ -118,59 +129,66 @@ export default function Matching() {
                 return;
               }
 
-              // 2. Read other people's sessions to ensure they are available
-              const otherRefs = others.map(o => doc(db, 'sessions', o.id));
-              const otherSnaps = await Promise.all(otherRefs.map(ref => transaction.get(ref)));
-              
               let targetGroupId: string | null = null;
               let matchGroupRef = null;
               let matchGroupData: any = null;
 
-              // FIXED: If someone already created a group -> join it instead of creating a new one
-              for (const snap of otherSnaps) {
-                if (snap.exists() && snap.data().matchGroupId) {
-                  const tempGroupRef = doc(db, 'matchGroups', snap.data().matchGroupId);
-                  const tempGroupSnap = await transaction.get(tempGroupRef);
-                  
-                  // Ensure group exists and hasn't reached max limit (5)
-                  if (tempGroupSnap.exists() && tempGroupSnap.data().userIds.length < 5) {
-                    targetGroupId = snap.data().matchGroupId;
-                    matchGroupRef = tempGroupRef;
-                    matchGroupData = tempGroupSnap.data();
-                    break; 
+              // NEW: 1. Try to JOIN existing group FIRST
+              if (candidateGroupRefs.length > 0) {
+                const groupSnaps = await Promise.all(candidateGroupRefs.map(ref => transaction.get(ref)));
+                for (const snap of groupSnaps) {
+                  if (snap.exists()) {
+                    const data = snap.data();
+                    const timesOverlap = data.startTime < session.endTime && session.startTime < data.endTime;
+                    
+                    // Verify group is still valid, has space, and times overlap
+                    if (data.status === 'pending' && data.userIds.length < 5 && timesOverlap) {
+                      targetGroupId = snap.id;
+                      matchGroupRef = snap.ref;
+                      matchGroupData = data;
+                      break; // Found a valid group!
+                    }
                   }
                 }
               }
 
-              // Filter users who are still available (searching) to form a new group
-              const availableOthers = otherSnaps.filter(snap => snap.exists() && snap.data().status === 'searching');
+              let availableOthers: any[] = [];
 
-              // SAFE EXIT: If no group to join and no available users to form a new one, exit safely
-              if (!targetGroupId && availableOthers.length === 0) {
-                return;
+              // UPDATED: 2. Fallback to CREATE new group if no existing group found
+              if (!targetGroupId && others.length >= 1) {
+                const otherRefs = others.map(o => doc(db, 'sessions', o.id));
+                const otherSnaps = await Promise.all(otherRefs.map(ref => transaction.get(ref)));
+                
+                availableOthers = otherSnaps.filter(snap => snap.exists() && snap.data().status === 'searching');
+
+                if (availableOthers.length > 0) {
+                  const foundingIds = [session.userId, availableOthers[0].data().userId].sort();
+                  targetGroupId = `match_${session.date}_${session.city}_${foundingIds.join('_')}`.replace(/\s+/g, '_');
+                  matchGroupRef = doc(db, 'matchGroups', targetGroupId);
+                  
+                  const suggestedPlace = MOCK_PLACES.find(p => p.type === session.activityType) || MOCK_PLACES[0];
+                  
+                  matchGroupData = {
+                    id: targetGroupId,
+                    city: session.city,                 // NEW: Added for querying existing groups
+                    activityType: session.activityType, // NEW: Added for querying existing groups
+                    date: session.date,                 // NEW: Added for querying existing groups
+                    userIds: [],
+                    members: [], // NEW: Array containing member data
+                    placeId: suggestedPlace.id,
+                    suggestedPlace,
+                    startTime: session.startTime,
+                    endTime: session.endTime,
+                    status: 'pending',
+                    confirmedUserIds: [],
+                    createdAt: Date.now(),
+                  };
+                }
               }
 
-              // If no group to join, create a new one
+              // SAFE EXIT: If no group to join and no available users to form a new one, exit safely
               if (!targetGroupId) {
-                // Create unique ID based on first two people to prevent duplication
-                const foundingIds = [session.userId, availableOthers[0].data().userId].sort();
-                targetGroupId = `match_${session.date}_${session.city}_${foundingIds.join('_')}`.replace(/\s+/g, '_');
-                matchGroupRef = doc(db, 'matchGroups', targetGroupId);
-                
-                const suggestedPlace = MOCK_PLACES.find(p => p.type === session.activityType) || MOCK_PLACES[0];
-                
-                matchGroupData = {
-                  id: targetGroupId,
-                  userIds: [],
-                  members: [], // NEW: Array containing member data
-                  placeId: suggestedPlace.id,
-                  suggestedPlace,
-                  startTime: session.startTime,
-                  endTime: session.endTime,
-                  status: 'pending',
-                  confirmedUserIds: [],
-                  createdAt: Date.now(),
-                };
+                return;
               }
 
               // FIXED: Ensure no duplicate userIds or members in the group
