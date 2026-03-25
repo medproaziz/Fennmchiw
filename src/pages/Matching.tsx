@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, setDoc, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Session, UserProfile, MatchGroup, Place } from '../types';
@@ -73,64 +73,181 @@ export default function Matching() {
       const unsubscribeOthers = onSnapshot(q, async (snapshot) => {
         if (isMatchedRef.current) return;
 
-        const others = snapshot.docs
+        // NEW: Helper to calculate common interests
+        const getCommonInterests = (userInterests: string[] = [], otherInterests: string[] = []) => {
+          return otherInterests.filter(interest => userInterests.includes(interest));
+        };
+
+        // UPDATED: Filter results to include time overlap, different user, and shared interests
+        let others = snapshot.docs
           .map(d => ({ id: d.id, ...d.data() } as Session))
+          .map(s => {
+            // NEW: Calculate common interests count
+            const commonInterests = getCommonInterests(session.interests || [], s.interests || []);
+            return { ...s, commonInterests, commonCount: commonInterests.length };
+          })
           .filter(s => {
             const isDifferentUser = s.userId !== session.userId;
+            // Time Overlap algorithm
             const timesOverlap = s.startTime < session.endTime && session.startTime < s.endTime;
-            return isDifferentUser && timesOverlap;
+            // NEW: Require at least 1 shared interest (or if interests are empty, just match anyway to avoid blocking)
+            const hasSharedInterest = (!session.interests?.length || !s.interests?.length) ? true : s.commonCount >= 1;
+            
+            return isDifferentUser && timesOverlap && hasSharedInterest;
           });
+
+        // NEW: Sort users by number of common interests (highest first)
+        others.sort((a, b) => b.commonCount - a.commonCount);
+
+        // NEW: Limit to 4 other people (so total is 5 with current user)
+        others = others.slice(0, 4);
 
         // We need at least 2 people total (current user + at least 1 other)
         if (others.length >= 1) {
-          isMatchedRef.current = true;
-          setIsMatched(true);
-          
-          // Deterministic match ID based on sorted user IDs to prevent duplicate groups
-          const allUserIds = Array.from(new Set([session.userId, ...others.map(s => s.userId)])).sort();
-          const matchId = `match_${session.date}_${session.city}_${allUserIds.join('_')}`.replace(/\s+/g, '_');
-          
-          const suggestedPlace = MOCK_PLACES.find(p => p.type === session.activityType) || MOCK_PLACES[0];
-          
-          const matchGroup: MatchGroup = {
-            id: matchId,
-            userIds: allUserIds.slice(0, 5), // Limit to 5 people
-            placeId: suggestedPlace.id,
-            suggestedPlace,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            status: 'pending',
-            confirmedUserIds: [],
-            createdAt: Date.now(),
-          };
+          let matchFound = false; // NEW: Flag for successful match event
 
           try {
-            // Play sound if enabled
-            const userDoc = await getDoc(doc(db, 'users', session.userId));
-            if (userDoc.exists()) {
-              const userData = userDoc.data() as UserProfile;
-              if (userData?.soundEnabled !== false) {
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                audio.play().catch(e => console.warn("Audio play failed:", e));
+            // FIXED: Use runTransaction to prevent Race Conditions
+            await runTransaction(db, async (transaction) => {
+              // 1. Ensure current user's session is still "searching"
+              const mySessionRef = doc(db, 'sessions', session.id);
+              const mySessionSnap = await transaction.get(mySessionRef);
+              
+              // SAFE EXIT: Return early instead of throwing error if user is no longer searching
+              if (!mySessionSnap.exists() || mySessionSnap.data().status !== 'searching') {
+                return;
               }
+
+              // 2. Read other people's sessions to ensure they are available
+              const otherRefs = others.map(o => doc(db, 'sessions', o.id));
+              const otherSnaps = await Promise.all(otherRefs.map(ref => transaction.get(ref)));
+              
+              let targetGroupId: string | null = null;
+              let matchGroupRef = null;
+              let matchGroupData: any = null;
+
+              // FIXED: If someone already created a group -> join it instead of creating a new one
+              for (const snap of otherSnaps) {
+                if (snap.exists() && snap.data().matchGroupId) {
+                  const tempGroupRef = doc(db, 'matchGroups', snap.data().matchGroupId);
+                  const tempGroupSnap = await transaction.get(tempGroupRef);
+                  
+                  // Ensure group exists and hasn't reached max limit (5)
+                  if (tempGroupSnap.exists() && tempGroupSnap.data().userIds.length < 5) {
+                    targetGroupId = snap.data().matchGroupId;
+                    matchGroupRef = tempGroupRef;
+                    matchGroupData = tempGroupSnap.data();
+                    break; 
+                  }
+                }
+              }
+
+              // Filter users who are still available (searching) to form a new group
+              const availableOthers = otherSnaps.filter(snap => snap.exists() && snap.data().status === 'searching');
+
+              // SAFE EXIT: If no group to join and no available users to form a new one, exit safely
+              if (!targetGroupId && availableOthers.length === 0) {
+                return;
+              }
+
+              // If no group to join, create a new one
+              if (!targetGroupId) {
+                // Create unique ID based on first two people to prevent duplication
+                const foundingIds = [session.userId, availableOthers[0].data().userId].sort();
+                targetGroupId = `match_${session.date}_${session.city}_${foundingIds.join('_')}`.replace(/\s+/g, '_');
+                matchGroupRef = doc(db, 'matchGroups', targetGroupId);
+                
+                const suggestedPlace = MOCK_PLACES.find(p => p.type === session.activityType) || MOCK_PLACES[0];
+                
+                matchGroupData = {
+                  id: targetGroupId,
+                  userIds: [],
+                  members: [], // NEW: Array containing member data
+                  placeId: suggestedPlace.id,
+                  suggestedPlace,
+                  startTime: session.startTime,
+                  endTime: session.endTime,
+                  status: 'pending',
+                  confirmedUserIds: [],
+                  createdAt: Date.now(),
+                };
+              }
+
+              // FIXED: Ensure no duplicate userIds or members in the group
+              const existingUserIds = new Set(matchGroupData.userIds || []);
+              
+              if (!existingUserIds.has(session.userId)) {
+                matchGroupData.userIds.push(session.userId);
+                existingUserIds.add(session.userId);
+                
+                // Ensure member doesn't already exist before pushing
+                if (!matchGroupData.members.some((m: any) => m.id === session.userId)) {
+                  matchGroupData.members.push({
+                    id: session.userId,
+                    name: session.userName || "مستخدم",
+                    avatar: session.userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.userId}`,
+                    interests: session.interests || []
+                  });
+                }
+              }
+
+              const sessionsToUpdate = [mySessionRef];
+              
+              // Add other available people (max 5 per group)
+              for (const snap of availableOthers) {
+                if (matchGroupData.userIds.length >= 5) break; 
+                
+                const data = snap.data();
+                if (!existingUserIds.has(data.userId)) {
+                  matchGroupData.userIds.push(data.userId);
+                  existingUserIds.add(data.userId);
+                  
+                  if (!matchGroupData.members.some((m: any) => m.id === data.userId)) {
+                    matchGroupData.members.push({
+                      id: data.userId,
+                      name: data.userName || "مستخدم",
+                      avatar: data.userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.userId}`,
+                      interests: data.interests || []
+                    });
+                  }
+                  sessionsToUpdate.push(snap.ref);
+                }
+              }
+
+              // Execute all updates atomically
+              transaction.set(matchGroupRef!, matchGroupData, { merge: true });
+              
+              sessionsToUpdate.forEach(ref => {
+                transaction.update(ref, {
+                  status: 'matched',
+                  matchGroupId: targetGroupId
+                });
+              });
+              
+              matchFound = true; // NEW: Activate match flag
+            });
+
+            // FIXED: Only set isMatchedRef.current = true AFTER successful transaction
+            if (matchFound) {
+              isMatchedRef.current = true;
+              setIsMatched(true);
+              
+              // Play sound if enabled
+              const userDoc = await getDoc(doc(db, 'users', session.userId));
+              if (userDoc.exists()) {
+                const userData = userDoc.data() as UserProfile;
+                if (userData?.soundEnabled !== false) {
+                  const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                  audio.play().catch(e => console.warn("Audio play failed:", e));
+                }
+              }
+              
+              toast.success("لقينا ليك مجموعة!");
             }
 
-            // Use setDoc with deterministic ID
-            await setDoc(doc(db, 'matchGroups', matchId), matchGroup).catch(e => handleFirestoreError(e, OperationType.WRITE, `matchGroups/${matchId}`));
-            
-            // Update all involved sessions
-            const sessionIds = [session.id, ...others.map(s => s.id)].slice(0, 5);
-            const updatePromises = sessionIds.map(id => 
-              updateDoc(doc(db, 'sessions', id), {
-                status: 'matched',
-                matchGroupId: matchId
-              }).catch(e => handleFirestoreError(e, OperationType.UPDATE, `sessions/${id}`))
-            );
-            
-            await Promise.all(updatePromises);
-            toast.success("لقينا ليك مجموعة!");
-          } catch (error) {
-            console.error("Error creating match:", error);
+          } catch (error: any) {
+            console.error("Transaction failed or aborted: ", error.message);
+            // FIXED: Reset ref properly if transaction fails
             isMatchedRef.current = false;
             setIsMatched(false);
           }

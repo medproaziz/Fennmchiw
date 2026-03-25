@@ -49,7 +49,10 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isAuthenticated();
       allow create: if isOwner(uid) && isValidUser(request.resource.data);
-      allow update: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (isOwner(uid) && isValidUser(request.resource.data)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'ratingCount']))
+      );
     }
 
     match /sessions/{sessionId} {
@@ -74,6 +77,11 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated();
       }
+    }
+
+    match /ratings/{ratingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
     }
   }
 }
