@@ -16,7 +16,12 @@ export default function Settings() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
   useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
     const fetchProfile = async () => {
       if (!auth.currentUser) return;
       try {
@@ -33,6 +38,25 @@ export default function Settings() {
     };
     fetchProfile();
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      toast.error('متصفحك لا يدعم إشعارات الهاتف');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        toast.success('تم تفعيل إشعارات الهاتف بنجاح');
+      } else {
+        toast.error('تم رفض إشعارات الهاتف');
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      toast.error('حدث خطأ أثناء طلب الإشعارات');
+    }
+  };
 
   const toggleSound = async () => {
     if (!auth.currentUser || !profile) return;
@@ -66,7 +90,13 @@ export default function Settings() {
           toggle: true,
           value: profile?.soundEnabled ?? true
         },
-        { icon: <Bell size={20} />, label: 'تنبيهات المجموعات', action: () => toast.info('قريبا...') },
+        { 
+          icon: <Bell size={20} />, 
+          label: 'إشعارات الهاتف', 
+          action: requestNotificationPermission,
+          toggle: true,
+          value: notificationPermission === 'granted'
+        },
       ]
     },
     {

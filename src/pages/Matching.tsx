@@ -56,6 +56,18 @@ export default function Matching() {
     const interval = setInterval(() => {
       setMatchingStep((s) => (s + 1) % steps.length);
       setTimeElapsed((prev) => prev + 3);
+
+      if (session && session.status === 'searching') {
+        const [year, month, day] = session.date.split('-').map(Number);
+        const [hours, minutes] = session.endTime.split(':').map(Number);
+        const sessionEnd = new Date(year, month - 1, day, hours, minutes);
+        if (new Date() > sessionEnd) {
+          updateDoc(doc(db, 'sessions', session.id), { status: 'expired' }).then(() => {
+            toast.info('وقت الخرجة سالا، تم إنهاء البحث.');
+            navigate('/');
+          }).catch(console.error);
+        }
+      }
     }, 3000);
 
     // REAL-TIME MATCHING LOGIC
@@ -78,9 +90,22 @@ export default function Matching() {
           return otherInterests.filter(interest => userInterests.includes(interest));
         };
 
+        const now = new Date();
+
         // UPDATED: Filter results to include time overlap, different user, and shared interests
         let others = snapshot.docs
           .map(d => ({ id: d.id, ...d.data() } as Session))
+          .filter(s => {
+            // Auto-expire stale sessions from the pool
+            const [year, month, day] = s.date.split('-').map(Number);
+            const [hours, minutes] = s.endTime.split(':').map(Number);
+            const sessionEnd = new Date(year, month - 1, day, hours, minutes);
+            if (now > sessionEnd) {
+              updateDoc(doc(db, 'sessions', s.id), { status: 'expired' }).catch(() => {});
+              return false;
+            }
+            return true;
+          })
           .map(s => {
             // NEW: Calculate common interests count
             const commonInterests = getCommonInterests(session.interests || [], s.interests || []);
@@ -250,6 +275,26 @@ export default function Matching() {
               isMatchedRef.current = true;
               setIsMatched(true);
               
+              // Create notifications for other users in the group
+              try {
+                const otherUserIds = matchGroupData.userIds.filter((id: string) => id !== session.userId);
+                for (const uid of otherUserIds) {
+                  const notifRef = doc(collection(db, 'notifications'));
+                  await setDoc(notifRef, {
+                    id: notifRef.id,
+                    userId: uid,
+                    title: 'مجموعة جديدة!',
+                    body: `لقينا ليك مجموعة باش تخرجو لـ ${session.activityType}`,
+                    type: 'match',
+                    read: false,
+                    link: `/match-result/${targetGroupId}`,
+                    createdAt: Date.now()
+                  });
+                }
+              } catch (e) {
+                console.error("Failed to send notifications", e);
+              }
+
               // Play sound if enabled
               const userDoc = await getDoc(doc(db, 'users', session.userId));
               if (userDoc.exists()) {

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, getDocs } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { motion } from 'motion/react';
 import { UserProfile, Session } from '../types';
@@ -17,7 +17,45 @@ export default function Home() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [pastSessions, setPastSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const checkExpiration = async () => {
+      try {
+        const [year, month, day] = activeSession.date.split('-').map(Number);
+        const [hours, minutes] = activeSession.endTime.split(':').map(Number);
+        const sessionEnd = new Date(year, month - 1, day, hours, minutes);
+
+        if (new Date() > sessionEnd) {
+          const sessionRef = doc(db, 'sessions', activeSession.id);
+          await updateDoc(sessionRef, { status: 'expired' });
+
+          if (activeSession.matchGroupId) {
+            const matchRef = doc(db, 'matchGroups', activeSession.matchGroupId);
+            await updateDoc(matchRef, { status: 'completed' });
+
+            const q = query(collection(db, 'sessions'), where('matchGroupId', '==', activeSession.matchGroupId));
+            const snap = await getDocs(q);
+            snap.forEach(async (docSnap) => {
+              if (docSnap.id !== activeSession.id) {
+                await updateDoc(docSnap.ref, { status: 'expired' });
+              }
+            });
+          }
+          toast.info('وقت الخرجة سالا، تم إنهاء الجلسة.');
+        }
+      } catch (error) {
+        console.error('Error checking expiration:', error);
+      }
+    };
+
+    checkExpiration();
+    const interval = setInterval(checkExpiration, 1000); // Check every second
+    return () => clearInterval(interval);
+  }, [activeSession]);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -32,13 +70,13 @@ export default function Home() {
       }
     };
 
-    const q = query(
+    const qActive = query(
       collection(db, 'sessions'),
       where('userId', '==', auth.currentUser.uid),
       where('status', 'in', ['searching', 'matched', 'confirmed'])
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeActive = onSnapshot(qActive, (snapshot) => {
       if (!snapshot.empty) {
         setActiveSession(snapshot.docs[0].data() as Session);
       } else {
@@ -47,8 +85,25 @@ export default function Home() {
       setLoading(false);
     });
 
+    const qPast = query(
+      collection(db, 'sessions'),
+      where('userId', '==', auth.currentUser.uid),
+      where('status', '==', 'expired')
+    );
+
+    const unsubscribePast = onSnapshot(qPast, (snapshot) => {
+      const sessions = snapshot.docs
+        .map(doc => doc.data() as Session)
+        .filter(session => session.matchGroupId); // Only show sessions that actually matched
+      sessions.sort((a, b) => b.createdAt - a.createdAt);
+      setPastSessions(sessions);
+    });
+
     fetchProfile();
-    return () => unsubscribe();
+    return () => {
+      unsubscribeActive();
+      unsubscribePast();
+    };
   }, [navigate]);
 
   if (loading) {
@@ -234,15 +289,32 @@ export default function Home() {
         </div>
         
         <div className="space-y-3">
-          <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-2xl flex items-center gap-4 opacity-50">
-            <div className="w-12 h-12 bg-neutral-800 rounded-xl flex items-center justify-center text-neutral-600">
-              <Users size={24} />
+          {pastSessions.length > 0 ? (
+            pastSessions.map((session) => (
+              <div key={session.id} className="bg-neutral-900 border border-neutral-800 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-12 h-12 bg-neutral-800 rounded-xl flex items-center justify-center text-orange-500">
+                  <Users size={24} />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-sm capitalize">{session.activityType}</h4>
+                  <p className="text-xs text-neutral-500">{session.date} • {session.startTime} - {session.endTime}</p>
+                </div>
+                <div className="text-xs font-bold text-neutral-500 bg-neutral-800 px-2 py-1 rounded-md">
+                  سالات
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="bg-neutral-900/50 border border-neutral-800 p-4 rounded-2xl flex items-center gap-4 opacity-50">
+              <div className="w-12 h-12 bg-neutral-800 rounded-xl flex items-center justify-center text-neutral-600">
+                <Users size={24} />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-sm">ما كاين حتى مجموعة قديمة</h4>
+                <p className="text-xs text-neutral-600 italic">تاريخ الخرجات ديالك غادي يبان هنا.</p>
+              </div>
             </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-sm">ما كاين حتى مجموعة قديمة</h4>
-              <p className="text-xs text-neutral-600 italic">تاريخ الخرجات ديالك غادي يبان هنا.</p>
-            </div>
-          </div>
+          )}
         </div>
       </section>
     </div>

@@ -67,6 +67,22 @@
         "timestamp": { "type": "number" }
       },
       "required": ["fromUserId", "toUserId", "matchId", "score", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "link": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "title", "body", "type", "read", "createdAt"]
     }
   },
   "firestore": {
@@ -85,6 +101,10 @@
     "/ratings/{ratingId}": {
       "schema": "UserRating",
       "description": "Collection of user ratings"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of user notifications"
     }
   }
 }

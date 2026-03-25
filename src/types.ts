@@ -64,7 +64,11 @@ export interface Place {
 
 export interface MatchGroup {
   id: string;
+  city?: string;
+  activityType?: string;
+  date?: string;
   userIds: string[];
+  members?: any[];
   placeId: string;
   suggestedPlace: Place;
   startTime: string;
@@ -89,4 +93,15 @@ export interface UserRating {
   matchId: string;
   score: number;
   timestamp: number;
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: 'match' | 'message' | 'system';
+  read: boolean;
+  link?: string;
+  createdAt: number;
 }

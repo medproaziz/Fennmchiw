@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc, orderBy, limit, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc, orderBy, limit, getDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { MatchGroup, UserProfile, ChatMessage } from '../types';
@@ -26,6 +26,45 @@ export default function MatchResult() {
   const [ratingModalUser, setRatingModalUser] = useState<UserProfile | null>(null);
   const [selectedRating, setSelectedRating] = useState(0);
   const [givenRatings, setGivenRatings] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!match) return;
+
+    const checkExpiration = async () => {
+      try {
+        const dateStr = match.date || new Date().toISOString().split('T')[0];
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const [hours, minutes] = match.endTime.split(':').map(Number);
+        const matchEnd = new Date(year, month - 1, day, hours, minutes);
+
+        if (new Date() > matchEnd && match.status !== 'completed') {
+          const matchRef = doc(db, 'matchGroups', match.id);
+          await updateDoc(matchRef, { status: 'completed' });
+
+          if (auth.currentUser) {
+            const q = query(
+              collection(db, 'sessions'),
+              where('matchGroupId', '==', match.id),
+              where('userId', '==', auth.currentUser.uid)
+            );
+            const snap = await getDocs(q);
+            snap.forEach(async (docSnap) => {
+              await updateDoc(docSnap.ref, { status: 'expired' });
+            });
+          }
+
+          toast.info('وقت الخرجة سالا، تم إنهاء المجموعة.');
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Error checking match expiration:', error);
+      }
+    };
+
+    checkExpiration();
+    const interval = setInterval(checkExpiration, 1000);
+    return () => clearInterval(interval);
+  }, [match, navigate]);
 
   useEffect(() => {
     if (!matchId || !auth.currentUser) return;
@@ -202,6 +241,22 @@ export default function MatchResult() {
     try {
       await addDoc(collection(db, `matchGroups/${matchId}/messages`), msg);
       setNewMessage('');
+
+      // Send notifications to other members
+      const otherUserIds = match.userIds.filter(id => id !== auth.currentUser?.uid);
+      for (const uid of otherUserIds) {
+        const notifRef = doc(collection(db, 'notifications'));
+        await setDoc(notifRef, {
+          id: notifRef.id,
+          userId: uid,
+          title: `رسالة جديدة من ${userName}`,
+          body: newMessage.length > 30 ? newMessage.substring(0, 30) + '...' : newMessage,
+          type: 'message',
+          read: false,
+          link: `/match-result/${matchId}`,
+          createdAt: Date.now()
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `matchGroups/${matchId}/messages`);
     }
