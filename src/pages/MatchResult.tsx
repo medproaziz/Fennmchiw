@@ -53,36 +53,63 @@ export default function MatchResult() {
   useEffect(() => {
     if (!matchId) return;
 
-    const unsubscribe = onSnapshot(doc(db, 'matchGroups', matchId), async (docSnap) => {
+    const unsubscribe = onSnapshot(doc(db, 'matchGroups', matchId), { includeMetadataChanges: true }, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as MatchGroup;
         
         // If user is not in the group anymore, go home
+        // We ignore cache snapshots for this check to prevent kicking the user
+        // before the latest server data arrives (e.g. right after they joined).
         if (auth.currentUser && !data.userIds.includes(auth.currentUser.uid)) {
-          navigate('/home');
-          return;
+          if (docSnap.metadata.fromCache) {
+            console.log("User not in group (cache), waiting for server...");
+            // Don't return here, just skip the kick. We still want to setMatch so the UI can render something.
+          } else {
+            console.log("User not in group (server), kicking to home.");
+            navigate('/home');
+            return;
+          }
         }
 
         setMatch(data);
-        
-        // Fetch member profiles
-        const memberProfiles: UserProfile[] = [];
-        for (const uid of data.userIds) {
-          const userDoc = await getDoc(doc(db, 'users', uid));
-          if (userDoc.exists()) {
-            memberProfiles.push(userDoc.data() as UserProfile);
-          }
-        }
-        setMembers(memberProfiles);
       } else {
-        toast.error('المجموعة تفرتكات حيت بقا فيها غير واحد.');
-        navigate('/home');
+        if (!docSnap.metadata.fromCache) {
+          toast.error('المجموعة تفرتكات حيت بقا فيها غير واحد.');
+          navigate('/home');
+        }
       }
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `matchGroups/${matchId}`);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [matchId, navigate]);
+
+  const userIdsString = match?.userIds?.join(',') || '';
+
+  useEffect(() => {
+    if (!match?.userIds || match.userIds.length === 0) {
+      setMembers([]);
+      return;
+    }
+
+    // Firestore 'in' queries support up to 10 items, which is fine since max group size is 5
+    const q = query(
+      collection(db, 'users'),
+      where('uid', 'in', match.userIds)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const memberProfiles = snapshot.docs.map(doc => doc.data() as UserProfile);
+      setMembers(memberProfiles);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    return () => unsubscribe();
+  }, [userIdsString]);
 
   useEffect(() => {
     if (!matchId || !showChat) return;

@@ -195,17 +195,17 @@ export default function Matching() {
               const existingUserIds = new Set(matchGroupData.userIds || []);
               
               if (!existingUserIds.has(session.userId)) {
-                matchGroupData.userIds.push(session.userId);
+                matchGroupData.userIds = [...(matchGroupData.userIds || []), session.userId];
                 existingUserIds.add(session.userId);
                 
                 // Ensure member doesn't already exist before pushing
-                if (!matchGroupData.members.some((m: any) => m.id === session.userId)) {
-                  matchGroupData.members.push({
+                if (!matchGroupData.members?.some((m: any) => m.id === session.userId)) {
+                  matchGroupData.members = [...(matchGroupData.members || []), {
                     id: session.userId,
                     name: session.userName || "مستخدم",
                     avatar: session.userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.userId}`,
                     interests: session.interests || []
-                  });
+                  }];
                 }
               }
 
@@ -217,16 +217,16 @@ export default function Matching() {
                 
                 const data = snap.data();
                 if (!existingUserIds.has(data.userId)) {
-                  matchGroupData.userIds.push(data.userId);
+                  matchGroupData.userIds = [...matchGroupData.userIds, data.userId];
                   existingUserIds.add(data.userId);
                   
-                  if (!matchGroupData.members.some((m: any) => m.id === data.userId)) {
-                    matchGroupData.members.push({
+                  if (!matchGroupData.members?.some((m: any) => m.id === data.userId)) {
+                    matchGroupData.members = [...(matchGroupData.members || []), {
                       id: data.userId,
                       name: data.userName || "مستخدم",
                       avatar: data.userAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.userId}`,
                       interests: data.interests || []
-                    });
+                    }];
                   }
                   sessionsToUpdate.push(snap.ref);
                 }
