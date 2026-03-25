@@ -9,7 +9,7 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { motion } from 'motion/react';
 import { UserProfile, Session } from '../types';
-import { Zap, Clock, MapPin, Users, ChevronRight } from 'lucide-react';
+import { Zap, Clock, MapPin, Users, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -63,11 +63,23 @@ export default function Home() {
 
   return (
     <div className="p-6 space-y-8">
-      <header className="space-y-1">
-        <h2 className="text-3xl font-black tracking-tighter italic">
-          السلام، <span className="text-orange-500">{profile?.name}</span>
-        </h2>
-        <p className="text-neutral-500 text-sm font-medium">واجد لشي مغامرة جديدة؟</p>
+      <header className="space-y-1 flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-black tracking-tighter italic">
+            السلام، <span className="text-orange-500">{profile?.name}</span>
+          </h2>
+          <p className="text-neutral-500 text-sm font-medium">واجد لشي مغامرة جديدة؟</p>
+        </div>
+        
+        {auth.currentUser?.email === 'elbadaouimohamedaziz49@gmail.com' && (
+          <button 
+            onClick={() => navigate('/admin')}
+            className="bg-neutral-900 border border-neutral-800 p-3 rounded-2xl text-orange-500 hover:bg-neutral-800 transition-colors"
+            title="لوحة التحكم"
+          >
+            <LayoutDashboard size={24} />
+          </button>
+        )}
       </header>
 
       {activeSession ? (

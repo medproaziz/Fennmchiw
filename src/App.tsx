@@ -61,7 +61,7 @@ export default function App() {
               <Route path="/profile" element={user ? <Profile /> : <Navigate to="/" />} />
               <Route path="/edit-profile" element={user ? <EditProfile /> : <Navigate to="/" />} />
               <Route path="/settings" element={user ? <Settings /> : <Navigate to="/" />} />
-              <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/" />} />
+              <Route path="/admin" element={user && user.email === 'elbadaouimohamedaziz49@gmail.com' ? <AdminDashboard /> : <Navigate to="/home" />} />
             </Route>
           </Routes>
           <Toaster position="top-center" theme="dark" closeButton />
